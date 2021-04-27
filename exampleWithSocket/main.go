@@ -11,8 +11,9 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	bililive "personal/src/douyu-barrage"
 	"strconv"
+
+	douyulive "github.com/BaoJW/douyu-barrage"
 )
 
 type msg struct {
@@ -43,8 +44,8 @@ func main() {
 	if roomID <= 0 {
 		log.Fatalln("房间号错误!")
 	}
-	live := &bililive.Live{
-		ReceiveGift: func(roomID int, gift *bililive.GiftModel) {
+	live := &douyulive.Live{
+		ReceiveGift: func(roomID int, gift *douyulive.GiftModel) {
 			log.Printf("【礼物】%v:  %v(%v) * %v  价格 %v  连击 %v", gift.UserName, gift.GiftName, gift.GiftID, gift.Num, gift.Price, gift.Combo)
 			m := msg{
 				ID:    gift.GiftID,

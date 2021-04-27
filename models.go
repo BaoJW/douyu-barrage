@@ -1,4 +1,4 @@
-package bililive
+package douyulive
 
 import (
 	"context"
@@ -10,10 +10,9 @@ import (
 type Live struct {
 	Debug               bool                              // 是否显示日志
 	AnalysisRoutineNum  int                               // 消息分析协程数量，默认为1，为1可以保证通知顺序与接收到消息顺序相同
-	StormFilter         bool                              // 过滤节奏风暴弹幕，默认false不过滤
 	Live                func(int)                         // 直播开始通知
 	End                 func(int)                         // 直播结束通知
-	ReceiveMsg          func(int, *MsgModel)              // 接收消息方法
+	ReceiveMsg          func(int, map[string]string)      // 接收消息方法
 	ReceiveGift         func(int, *GiftModel)             // 接收礼物方法
 	ReceivePopularValue func(int, uint32)                 // 接收人气值方法
 	UserEnter           func(int, *UserEnterModel)        // 用户进入方法
@@ -34,9 +33,6 @@ type Live struct {
 	chSocketMessage chan *socketMessage
 	chOperation     chan *operateInfo
 
-	storming     map[int]bool             // 是否节奏风暴
-	stormContent map[int]map[int64]string // 节奏风暴内容
-
 	room map[int]*liveRoom // 直播间
 }
 
@@ -54,7 +50,11 @@ type liveRoom struct {
 	hostServerList     []*hostServerList
 	currentServerIndex int
 	token              string // key
+	tokenTime          int64  // key
 	conn               *net.TCPConn
+	aid                string
+	secret             string
+	auth               string
 }
 
 type messageHeader struct {
@@ -66,9 +66,9 @@ type messageHeader struct {
 }
 
 type operateInfo struct {
-	RoomID    int
-	Operation int32
-	Buffer    []byte
+	RoomID int
+	Type   string
+	Buffer map[string]string
 }
 
 // 进入房间信息
