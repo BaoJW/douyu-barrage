@@ -70,6 +70,23 @@ func main() {
 		SpecialUserMessageHandler: func(roomID int, msg *douyulive.SpecialUserMessage) {
 			log.Printf("【用户进房通知消息】欢迎 %s 进入直播间%d", msg.NickName, msg.RoomID)
 		},
+		SwitchBroadcastMessageHandler: func(roomID int, msg *douyulive.SwitchBroadcastMessage) {
+			if msg.Status == 0 {
+				log.Printf("【直播间开关播提醒消息】 %d直播间当前没有直播", msg.RoomID)
+			} else if msg.Status == 1 {
+				log.Printf("【直播间开关播提醒消息】 %d直播间当前正在直播", msg.RoomID)
+			}
+
+		},
+		BroadcastRankMessageHandler: func(roomID int, msg *douyulive.BroadcastRankMessage) {
+			log.Printf("【排行榜消息】 %d直播间当前时间%s排行榜消息 总榜: %v, 周榜: %v, 日榜: %v", msg.RoomID, time.Unix(msg.Timestamp, 0), msg.ListAll, msg.List, msg.ListDay)
+		},
+		SuperBarrageMessageHandler: func(roomID int, msg *douyulive.SuperBarrageMessage) {
+			log.Printf("【超级弹幕消息】 %d直播间超级弹幕消息: %s", msg.RoomID, msg.Content)
+		},
+		RoomGiftBarrageMessageHandler: func(roomID int, msg *douyulive.RoomGiftBroadcastMessage) {
+			log.Printf("【房间内礼物广播消息】 %d直播间 %s赠送给 %s %d个 %d", msg.RoomID, msg.SendNickName, msg.DoneeNickName, msg.GiftCount, msg.GiftID)
+		},
 	}
 	live.Start(context.Background())
 	_ = live.Join(*aid, *secret, *ip, *port, *roomID)
