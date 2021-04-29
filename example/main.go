@@ -13,7 +13,10 @@ import (
 func main() {
 	aid := flag.String("aid", "", "aid")
 	secret := flag.String("secret", "", "secret")
-	roomID := flag.Int("id", 0, "id")
+	roomID := flag.Int("roomId", 0, "roomId")
+	ip := flag.String("ip", "", "ip")
+	port := flag.Int("port", 0, "port")
+
 	flag.Parse()
 
 	if *aid == "" {
@@ -56,6 +59,6 @@ func main() {
 		},
 	}
 	live.Start(context.Background())
-	_ = live.Join(*aid, *secret, *roomID)
+	_ = live.Join(*aid, *secret, *ip, *port, *roomID)
 	live.Wait()
 }
