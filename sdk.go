@@ -17,8 +17,11 @@ import (
 )
 
 const (
-	LoginRespType   = "loginresp"
-	BarrageRespType = "chatmsg"
+	LoginRespType       = "loginresp"
+	BarrageRespType     = "chatmsg"
+	StormRespType       = "onlinegift"
+	SendGiftRespType    = "dgb"
+	SpecialUserRespType = "uenter"
 )
 
 // Start 开始接收
@@ -32,17 +35,8 @@ func (live *Live) Start(ctx context.Context) {
 
 	live.room = make(map[int]*liveRoom)
 	live.chSocketMessage = make(chan *socketMessage, 30)
-	live.chOperation = make(chan *operateInfo, 300)
 
 	live.wg = sync.WaitGroup{}
-
-	for i := 0; i < live.AnalysisRoutineNum; i++ {
-		live.wg.Add(1)
-		go func() {
-			defer live.wg.Done()
-			live.analysis(ctx)
-		}()
-	}
 
 	live.wg.Add(1)
 	go func() {
@@ -56,7 +50,7 @@ func (live *Live) Wait() {
 }
 
 // Join 添加房间
-func (live *Live) Join(roomIDs ...int) error {
+func (live *Live) Join(aid, secret string, roomIDs ...int) error {
 	if len(roomIDs) == 0 {
 		return errors.New("没有要添加的房间")
 	}
@@ -72,6 +66,8 @@ func (live *Live) Join(roomIDs ...int) error {
 		room := &liveRoom{
 			roomID: roomID,
 			cancel: cancel,
+			aid:    aid,
+			secret: secret,
 		}
 		live.room[roomID] = room
 		room.enter()
@@ -110,225 +106,37 @@ func (live *Live) split(ctx context.Context) {
 			default:
 			}
 
-			msg := ByteToMsg(message.body)
-			if _, ok := msg["type"]; !ok {
-				log.Println("数据格式不匹配", msg)
-				continue
+			switch message.body["type"] {
+			case LoginRespType:
+				live.room[message.roomID].joinGroup()
+				if live.LoginRespMessageHandler != nil {
+					live.LoginRespMessageHandler(message.roomID, TransferLoginRespMessage(message.body))
+				}
+			case BarrageRespType:
+				if live.BarrageMessageHandler != nil {
+					live.BarrageMessageHandler(message.roomID, TransferBarrageMessage(message.body))
+				}
+			case StormRespType:
+				if live.StormMessageHandler != nil {
+					live.StormMessageHandler(message.roomID, TransferStormMessage(message.body))
+				}
+			case SendGiftRespType:
+				if live.SendGiftMessageHandler != nil {
+					live.SendGiftMessageHandler(message.roomID, TransferSendGiftMessage(message.body))
+				}
+			case SpecialUserRespType:
+				if live.SpecialUserMessageHandler != nil {
+					live.SpecialUserMessageHandler(message.roomID, TransferSpecialUserMessage(message.body))
+				}
+
+			default:
+
 			}
 
-			live.chOperation <- &operateInfo{RoomID: message.roomID, Type: msg["type"], Buffer: msg}
+			break
 		}
+
 	}
-}
-
-// 分析接收到的数据
-func (live *Live) analysis(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		buffer := <-live.chOperation
-		switch buffer.Type {
-		case LoginRespType:
-			live.room[buffer.RoomID].joinGroup(time.Now())
-		case BarrageRespType:
-			if live.ReceiveMsg != nil {
-				live.ReceiveMsg(buffer.RoomID, buffer.Buffer)
-			}
-		}
-	}
-
-	//case WS_OP_CONNECT_SUCCESS:
-	//	if live.Debug {
-	//		log.Println("CONNECT_SUCCESS", string(buffer.Buffer))
-	//	}
-	//case WS_OP_MESSAGE:
-	//	result := cmdModel{}
-	//	err := json.Unmarshal(buffer.Buffer, &result)
-	//	if err != nil {
-	//		if live.Debug {
-	//			log.Println(err)
-	//			log.Println(string(buffer.Buffer))
-	//		}
-	//		continue
-	//	}
-	//	temp, err := json.Marshal(result.Data)
-	//	if err != nil {
-	//		if live.Debug {
-	//			log.Println(err)
-	//		}
-	//		continue
-	//	}
-	//	switch result.CMD {
-	//	case "LIVE": // 直播开始
-	//		log.Println(string(buffer.Buffer))
-	//		if live.Live != nil {
-	//			live.Live(buffer.RoomID)
-	//		}
-	//	case "CLOSE": // 关闭
-	//		fallthrough
-	//	case "PREPARING": // 准备
-	//		fallthrough
-	//	case "END": // 结束
-	//		log.Println(string(buffer.Buffer))
-	//		if live.End != nil {
-	//			live.End(buffer.RoomID)
-	//		}
-	//	case "SYS_MSG": // 系统消息
-	//		if live.SysMessage != nil {
-	//			m := &SysMsgModel{}
-	//			_ = json.Unmarshal(buffer.Buffer, m)
-	//			live.SysMessage(buffer.RoomID, m)
-	//		}
-	//	case "ROOM_CHANGE": // 房间信息变更
-	//		if live.RoomChange != nil {
-	//			m := &RoomChangeModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.RoomChange(buffer.RoomID, m)
-	//		}
-	//	case "WELCOME": // 用户进入
-	//		if live.UserEnter != nil {
-	//			m := &UserEnterModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.UserEnter(buffer.RoomID, m)
-	//		}
-	//	case "WELCOME_GUARD": // 舰长进入
-	//		if live.GuardEnter != nil {
-	//			m := &GuardEnterModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.GuardEnter(buffer.RoomID, m)
-	//		}
-	//	case "DANMU_MSG": // 弹幕
-	//		if live.ReceiveMsg != nil {
-	//			msgContent := result.Info[1].(string)
-	//
-	//			if live.StormFilter && live.storming[buffer.RoomID] {
-	//				for _, value := range live.stormContent[buffer.RoomID] {
-	//					if msgContent == value {
-	//						//log.Println("过滤弹幕：", value)
-	//						continue analysis
-	//					}
-	//				}
-	//			}
-	//
-	//			userInfo := result.Info[2].([]interface{})
-	//			medalInfo := result.Info[3].([]interface{})
-	//			m := &MsgModel{
-	//				UserID:    int64(userInfo[0].(float64)),
-	//				UserName:  userInfo[1].(string),
-	//				UserLevel: int(result.Info[4].([]interface{})[0].(float64)),
-	//				Content:   msgContent,
-	//				Timestamp: int64(result.Info[9].(map[string]interface{})["ts"].(float64)),
-	//			}
-	//			if len(medalInfo) >= 4 {
-	//				m.MedalLevel = int(medalInfo[0].(float64))
-	//				m.MedalName = medalInfo[1].(string)
-	//				m.MedalUpName = medalInfo[2].(string)
-	//				m.MedalRoomID = int64(medalInfo[3].(float64))
-	//			}
-	//			live.ReceiveMsg(buffer.RoomID, m)
-	//		}
-	//	case "SEND_GIFT": // 礼物通知
-	//		if live.ReceiveGift != nil {
-	//			m := &GiftModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.ReceiveGift(buffer.RoomID, m)
-	//		}
-	//	case "COMBO_SEND": // 连击
-	//		if live.GiftComboSend != nil {
-	//			m := &ComboSendModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.GiftComboSend(buffer.RoomID, m)
-	//		}
-	//	case "COMBO_END": // 连击结束
-	//		if live.GiftComboEnd != nil {
-	//			m := &ComboEndModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.GiftComboEnd(buffer.RoomID, m)
-	//		}
-	//	case "GUARD_BUY": // 上船
-	//		if live.GuardBuy != nil {
-	//			m := &GuardBuyModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.GuardBuy(buffer.RoomID, m)
-	//		}
-	//	case "ROOM_REAL_TIME_MESSAGE_UPDATE": // 粉丝数更新
-	//		if live.FansUpdate != nil {
-	//			m := &FansUpdateModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.FansUpdate(buffer.RoomID, m)
-	//		}
-	//	case "ROOM_RANK": // 小时榜
-	//		if live.RoomRank != nil {
-	//			m := &RankModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.RoomRank(buffer.RoomID, m)
-	//		}
-	//	case "SPECIAL_GIFT": // 特殊礼物
-	//		m := &SpecialGiftModel{}
-	//		_ = json.Unmarshal(temp, m)
-	//		if m.Storm.Action == "start" {
-	//			m.Storm.ID, _ = strconv.ParseInt(m.Storm.TempID.(string), 10, 64)
-	//		}
-	//		if m.Storm.Action == "end" {
-	//			m.Storm.ID = int64(m.Storm.TempID.(float64))
-	//		}
-	//		if live.StormFilter && live.ReceiveMsg != nil {
-	//			if m.Storm.Action == "start" {
-	//				live.storming[buffer.RoomID] = true
-	//				live.stormContent[buffer.RoomID][m.Storm.ID] = m.Storm.Content
-	//				//log.Println("添加过滤弹幕：", m.Storm.ID, m.Storm.Content)
-	//			}
-	//			if m.Storm.Action == "end" {
-	//				delete(live.stormContent[buffer.RoomID], m.Storm.ID)
-	//				live.storming[buffer.RoomID] = len(live.stormContent) > 0
-	//				//log.Println("移除过滤弹幕：", m.Storm.ID, live.storming)
-	//			}
-	//		}
-	//		if live.SpecialGift != nil {
-	//			live.SpecialGift(buffer.RoomID, m)
-	//		}
-	//	case "SUPER_CHAT_MESSAGE": // 醒目留言
-	//		if live.SuperChatMessage != nil {
-	//			m := &SuperChatMessageModel{}
-	//			_ = json.Unmarshal(temp, m)
-	//			live.SuperChatMessage(buffer.RoomID, m)
-	//		}
-	//	case "SUPER_CHAT_MESSAGE_JPN":
-	//		if live.Debug {
-	//			log.Println(string(buffer.Buffer))
-	//		}
-	//	case "SYS_GIFT": // 系统礼物
-	//		fallthrough
-	//	case "BLOCK": // 未知
-	//		fallthrough
-	//	case "ROUND": // 未知
-	//		fallthrough
-	//	case "REFRESH": // 刷新
-	//		fallthrough
-	//	case "ACTIVITY_BANNER_UPDATE_V2": //
-	//		fallthrough
-	//	case "ANCHOR_LOT_CHECKSTATUS": //
-	//		fallthrough
-	//	case "GUARD_MSG": // 舰长信息
-	//		fallthrough
-	//	case "NOTICE_MSG": // 通知信息
-	//		fallthrough
-	//	case "GUARD_LOTTERY_START": // 舰长抽奖开始
-	//		fallthrough
-	//	case "USER_TOAST_MSG": // 用户通知消息
-	//		fallthrough
-	//	case "ENTRY_EFFECT": // 进入效果
-	//		fallthrough
-	//	case "WISH_BOTTLE": // 许愿瓶
-	//		fallthrough
-	//	case "ROOM_BLOCK_MSG":
-	//		fallthrough
-	//	case "WEEK_STAR_CLOCK":
-	//		fallthrough
 }
 
 func (room *liveRoom) createConnect() {
@@ -364,11 +172,11 @@ func (room *liveRoom) enter() {
 
 	currentTime := time.Now()
 	if room.token == "" || currentTime.Unix()-room.tokenTime >= 60*60*2 {
-		token, err := HttpGetDouYuToken(room.aid, room.secret, currentTime)
+		token, err := GenerateToken(room.aid, room.secret, currentTime)
 		if err != nil {
 			log.Panic(err)
 		}
-		room.token = string(token)
+		room.token = token
 		room.tokenTime = currentTime.Unix()
 	}
 
@@ -380,8 +188,9 @@ func (room *liveRoom) enter() {
 func (room *liveRoom) login(currentTime time.Time) {
 	auth := Md5(fmt.Sprintf("%s_%s_%d_%s", room.secret, room.aid, currentTime.Unix(), room.token))
 
-	loginMessage := MsgToByte(map[string]string{"type": "loginreq", "roomid": strconv.Itoa(room.realRoomID), "aid": room.aid, "token": room.token, "time": strconv.Itoa(int(currentTime.Unix())), "auth": auth})
+	loginMessage := MsgToByte(map[string]string{"type": "loginreq", "roomid": strconv.Itoa(room.roomID), "aid": room.aid, "token": room.token, "time": strconv.FormatInt(currentTime.Unix(), 10), "auth": auth})
 
+	fmt.Println(string(loginMessage))
 	// 登录弹幕服务器
 	if _, err := room.conn.Write(loginMessage); err != nil {
 		log.Panic("login failed:", err)
@@ -391,15 +200,20 @@ func (room *liveRoom) login(currentTime time.Time) {
 }
 
 // 入组
-func (room *liveRoom) joinGroup(currentTime time.Time) {
-	// 加入组
-	if _, err := room.conn.Write(MsgToByte(map[string]string{
+func (room *liveRoom) joinGroup() {
+
+	joinGroupMessage := MsgToByte(map[string]string{
 		"type":  "joingroup",
-		"rid":   "288016",
+		"rid":   strconv.Itoa(room.roomID),
 		"token": room.token,
-		"time":  strconv.Itoa(int(currentTime.Unix())),
+		"time":  strconv.FormatInt(room.tokenTime, 10),
 		"auth":  room.auth,
-	})); err != nil {
+	})
+
+	fmt.Println(string(joinGroupMessage))
+
+	// 加入组
+	if _, err := room.conn.Write(joinGroupMessage); err != nil {
 		log.Panic("joinGroup failed:", err)
 	}
 
@@ -407,6 +221,7 @@ func (room *liveRoom) joinGroup(currentTime time.Time) {
 
 // 心跳
 func (room *liveRoom) heartBeat(ctx context.Context) {
+	time.Sleep(3 * time.Second)
 	var errorCount = 0
 	for {
 		select {
@@ -421,7 +236,7 @@ func (room *liveRoom) heartBeat(ctx context.Context) {
 			if errorCount > 10 {
 				break
 			}
-			log.Printf("heatbeat failed")
+			log.Printf("heatbeat failed: %s", err.Error())
 			errorCount++
 		}
 		errorCount = 0
@@ -442,7 +257,7 @@ func (room *liveRoom) receive(ctx context.Context, chSocketMessage chan<- *socke
 		}
 
 		// 读取协议头
-		_, err := room.conn.Read(headerBuffer)
+		n, err := room.conn.Read(headerBuffer)
 		if err != nil {
 			if err == io.EOF {
 				continue
@@ -453,43 +268,18 @@ func (room *liveRoom) receive(ctx context.Context, chSocketMessage chan<- *socke
 
 		// 包体
 		var messageBody = make([]byte, int(binary.LittleEndian.Uint32(headerBuffer[0:4]))-int(HeadLen+MsgTypeLen+KeepLen))
-		_, err = room.conn.Read(messageBody)
+		n, err = room.conn.Read(messageBody)
 		if err != nil {
 			log.Println("read err:", err)
 			continue
 		}
+		data := ByteToMsg(messageBody[:n])
 
 		chSocketMessage <- &socketMessage{
 			roomID: room.roomID,
-			body:   messageBody,
+			body:   data,
 		}
-	}
-}
 
-// 发送数据
-func (room *liveRoom) sendData(operation int32, payload []byte) {
-
-	b := bytes.NewBuffer([]byte{})
-	head := messageHeader{
-		Length:          int32(len(payload)) + WS_PACKAGE_HEADER_TOTAL_LENGTH,
-		HeaderLength:    int16(WS_PACKAGE_HEADER_TOTAL_LENGTH),
-		ProtocolVersion: WS_HEADER_DEFAULT_VERSION,
-		Operation:       operation,
-		SequenceID:      WS_HEADER_DEFAULT_SEQUENCE,
-	}
-	err := binary.Write(b, binary.BigEndian, head)
-	if err != nil {
-		log.Println(err)
-	}
-
-	err = binary.Write(b, binary.LittleEndian, payload)
-	if err != nil {
-		log.Println(err)
-	}
-
-	_, err = room.conn.Write(b.Bytes())
-	if err != nil {
-		log.Println(err)
 	}
 }
 
