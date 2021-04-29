@@ -50,7 +50,7 @@ func (live *Live) Wait() {
 }
 
 // Join 添加房间
-func (live *Live) Join(aid, secret string, roomIDs ...int) error {
+func (live *Live) Join(aid, secret, ip string, port int, roomIDs ...int) error {
 	if len(roomIDs) == 0 {
 		return errors.New("没有要添加的房间")
 	}
@@ -68,6 +68,8 @@ func (live *Live) Join(aid, secret string, roomIDs ...int) error {
 			cancel: cancel,
 			aid:    aid,
 			secret: secret,
+			server: ip,
+			port:   port,
 		}
 		live.room[roomID] = room
 		room.enter()
