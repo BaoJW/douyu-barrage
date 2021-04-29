@@ -240,7 +240,7 @@ func (room *liveRoom) heartBeat(ctx context.Context) {
 			errorCount++
 		}
 		errorCount = 0
-		time.Sleep(45 * time.Second)
+		time.Sleep(30 * time.Second)
 	}
 }
 
