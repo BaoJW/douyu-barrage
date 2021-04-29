@@ -1,8 +1,8 @@
 # douyu-barrage
-斗鱼弹幕TCP获取
+斗鱼弹幕服务器接入--golang实现
 
 ### 功能
-1. 获取斗鱼服务器弹幕消息，礼物消息，动态消息等
+1. 接入斗鱼弹幕服务器，获取直播间弹幕、礼物、动态消息等
 
 ### 安装
 ```asciidoc
@@ -11,8 +11,9 @@ go get -u github.com/BaoJW/douyu-barrage
 
 ### aid和secret获取
 ```asciidoc
+需要去斗鱼申请接入的开发者权限
+注意：若申请权限就没有办法获取token,从而无法接入斗鱼弹幕服务器
 https://open.douyu.com/manage/ 
-要去斗鱼的申请接入的开发者权限,请注意没有申请权限就没有办法获取token,从而无法接入斗鱼弹幕服务器
 ```
 
 ### 斗鱼文档
@@ -22,9 +23,13 @@ https://open.douyu.com/source/
 
 ### 快速开始
 ```asciidoc
+func main() {
 	aid := flag.String("aid", "", "aid")
 	secret := flag.String("secret", "", "secret")
-	roomID := flag.Int("id", 0, "id")
+	roomID := flag.Int("roomId", 0, "roomId")
+	ip := flag.String("ip", "", "ip")
+	port := flag.Int("port", 0, "port")
+
 	flag.Parse()
 
 	if *aid == "" {
@@ -67,8 +72,10 @@ https://open.douyu.com/source/
 		},
 	}
 	live.Start(context.Background())
-	_ = live.Join(*aid, *secret, *roomID)
+	_ = live.Join(*aid, *secret, *ip, *port, *roomID)
 	live.Wait()
+}
+
 ```
 
 ### 最后
