@@ -17,11 +17,15 @@ import (
 )
 
 const (
-	LoginRespType       = "loginresp"
-	BarrageRespType     = "chatmsg"
-	StormRespType       = "onlinegift"
-	SendGiftRespType    = "dgb"
-	SpecialUserRespType = "uenter"
+	LoginRespType             = "loginresp"
+	BarrageRespType           = "chatmsg"
+	StormRespType             = "onlinegift"
+	SendGiftRespType          = "dgb"
+	SpecialUserRespType       = "uenter"
+	SwitchBroadcastRespType   = "rss"
+	BroadcastRankRespType     = "ranklist"
+	SuperBarrageRespType      = "ssd"
+	RoomGiftBroadcastRespType = "spbc"
 )
 
 // Start 开始接收
@@ -129,6 +133,22 @@ func (live *Live) split(ctx context.Context) {
 			case SpecialUserRespType:
 				if live.SpecialUserMessageHandler != nil {
 					live.SpecialUserMessageHandler(message.roomID, TransferSpecialUserMessage(message.body))
+				}
+			case SwitchBroadcastRespType:
+				if live.SwitchBroadcastMessageHandler != nil {
+					live.SwitchBroadcastMessageHandler(message.roomID, TransferSwitchBroadcastMessage(message.body))
+				}
+			case BroadcastRankRespType:
+				if live.BroadcastRankMessageHandler != nil {
+					live.BroadcastRankMessageHandler(message.roomID, TransferBroadcastRankMessage(message.body))
+				}
+			case SuperBarrageRespType:
+				if live.SuperBarrageMessageHandler != nil {
+					live.SuperBarrageMessageHandler(message.roomID, TransferSuperBarrageMessage(message.body))
+				}
+			case RoomGiftBroadcastRespType:
+				if live.RoomGiftBarrageMessageHandler != nil {
+					live.RoomGiftBarrageMessageHandler(message.roomID, TransferRoomGiftBroadcastMessage(message.body))
 				}
 
 			default:

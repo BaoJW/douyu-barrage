@@ -8,15 +8,19 @@ import (
 
 // Live 直播间
 type Live struct {
-	Debug                     bool                              // 是否显示日志
-	AnalysisRoutineNum        int                               // 消息分析协程数量，默认为1，为1可以保证通知顺序与接收到消息顺序相同
-	LoginRespMessageHandler   func(int, *LoginRespMessageModel) // 登录响应消息handler
-	BarrageMessageHandler     func(int, *BarrageMessageModel)   // 弹幕消息handler
-	StormMessageHandler       func(int, *StormMessage)          // 领取在线鱼丸暴击消息handler
-	SendGiftMessageHandler    func(int, *SendGiftMessage)       // 赠送礼物消息handler
-	SpecialUserMessageHandler func(int, *SpecialUserMessage)    // 用户进房通知消息handler
-	wg                        sync.WaitGroup
-	ctx                       context.Context
+	Debug                         bool                                 // 是否显示日志
+	AnalysisRoutineNum            int                                  // 消息分析协程数量，默认为1，为1可以保证通知顺序与接收到消息顺序相同
+	LoginRespMessageHandler       func(int, *LoginRespMessageModel)    // 登录响应消息handler
+	BarrageMessageHandler         func(int, *BarrageMessageModel)      // 弹幕消息handler
+	StormMessageHandler           func(int, *StormMessage)             // 领取在线鱼丸暴击消息handler
+	SendGiftMessageHandler        func(int, *SendGiftMessage)          // 赠送礼物消息handler
+	SpecialUserMessageHandler     func(int, *SpecialUserMessage)       // 用户进房通知消息handler
+	SwitchBroadcastMessageHandler func(int, *SwitchBroadcastMessage)   // 房间开关播消息handler
+	BroadcastRankMessageHandler   func(int, *BroadcastRankMessage)     // 广播排行榜消息handler
+	SuperBarrageMessageHandler    func(int, *SuperBarrageMessage)      // 超级弹幕消息handler
+	RoomGiftBarrageMessageHandler func(int, *RoomGiftBroadcastMessage) // 房间内礼物广播消息handler
+	wg                            sync.WaitGroup
+	ctx                           context.Context
 
 	chSocketMessage chan *socketMessage
 
@@ -199,6 +203,73 @@ type SpecialUserMessage struct {
 
 }
 
+// 直播间开关播提醒
+type SwitchBroadcastMessage struct {
+	Type    string `json:"type"`    // 表示为“房间开播提醒”消息，固定为 rss
+	RoomID  int64  `json:"rid"`     // 房间ID
+	GroupID int64  `json:"gid"`     // 弹幕分组ID
+	Status  int64  `json:"ss"`      // 直播状态，0-没有直播，1-正在直播
+	Code    int64  `json:"code"`    // 类型
+	Rt      int64  `json:"rt"`      // 开关播原因
+	Rtv     int64  `json:"rtv"`     // 关播原因类型的值
+	Notify  int64  `json:"notify"`  // 通知类型
+	Endtime int64  `json:"endtime"` // 关播时间（仅关播时有效）
+}
+
+// 广播排行榜消息
+type BroadcastRankMessage struct {
+	Type      string      `json:"type"`     // 表示为“广播排行榜消息”，固定为 ranklist
+	RoomID    int64       `json:"rid"`      // 房间ID
+	Timestamp int64       `json:"ts"`       // 排行榜更新时间戳
+	Sequex    int64       `json:"seq"`      // 排行榜序列号
+	GroupID   int64       `json:"gid"`      // 弹幕分组ID
+	ListAll   *ListDetail `json:"list_all"` // 总榜
+	List      *ListDetail `json:"list"`     // 周榜
+	ListDay   *ListDetail `json:"list_day"` // 日榜
+}
+
+// 榜单明细
+type ListDetail struct {
+	UID         int64 `json:"uid"`       // 用户 id
+	LastRank    int64 `json:"lrk"`       // 上次排名
+	CurrentRank int64 `json:"crk"`       // 当前排名
+	Rs          int64 `json:"rs"`        // 排名变化，-1：下降，0：持平，1：上升
+	GoldCost    int64 `json:"gold_cost"` // 当前贡献值
+}
+
+// 超级弹幕消息
+type SuperBarrageMessage struct {
+	Type       string `json:"type"`    // 表示为“超级弹幕”消息，固定为 ssd
+	RoomID     int64  `json:"rid"`     // 房间ID
+	GroupID    int64  `json:"gid"`     // 弹幕分组ID
+	SDID       int64  `json:"sdid"`    // 超级弹幕 id
+	TRID       int64  `json:"trid"`    // 跳转房间 id
+	Content    string `json:"content"` // 超级弹幕的内容
+	Url        string `json:"url"`     // 跳转url
+	ClientType int64  `json:"clitp"`   // 客户端类型
+	JumpType   int64  `json:"jmptp"`   // 跳转类型
+}
+
+// 房间内礼物广播
+type RoomGiftBroadcastMessage struct {
+	Type          string `json:"type"` // 表示为“房间内礼物广播”，固定为 spbc
+	RoomID        int64  `json:"rid"`  // 房间ID
+	GroupID       int64  `json:"gid"`  // 弹幕分组ID
+	SendNickName  string `json:"sn"`   // 赠送者昵称
+	DoneeNickName string `json:"dn"`   // 受赠者昵称
+	GiftName      int64  `json:"gn"`   // 礼物名称
+	GiftCount     int64  `json:"gc"`   // 礼物数量
+	DoneeRoomID   int64  `json:"drid"` // 赠送房间
+	Gs            int64  `json:"gs"`   // 广播样式
+	Gb            int64  `json:"gb"`   // 是否有礼包（0-无礼包，1-有礼包）
+	Es            int64  `json:"es"`   // 广播展现样式（1-火箭，2-飞机）
+	GiftID        int64  `json:"gfid"` // 礼物ID
+	EID           int64  `json:"eid"`  // 特效 id
+	Bgl           int64  `json:"bgl"`  // 广播礼物类型
+	Ifs           int64  `json:"ifs"`  // 服务功能字段，可忽略
+	Cl2           int64  `json:"cl2"`  // 栏目分类广播字段
+}
+
 func TransferLoginRespMessage(data map[string]string) *LoginRespMessageModel {
 	return &LoginRespMessageModel{
 		Type:          data["type"],
@@ -352,5 +423,84 @@ func TransferSpecialUserMessage(data map[string]string) *SpecialUserMessage {
 		},
 		Sahf: StrToInt64(data["sahf"]),
 		Wgei: StrToInt64(data["wgei"]),
+	}
+}
+
+func TransferSwitchBroadcastMessage(data map[string]string) *SwitchBroadcastMessage {
+	return &SwitchBroadcastMessage{
+		Type:    data["type"],
+		RoomID:  StrToInt64(data["rid"]),
+		GroupID: StrToInt64(data["gid"]),
+		Status:  StrToInt64(data["ss"]),
+		Code:    StrToInt64(data["code"]),
+		Rt:      StrToInt64(data["rt"]),
+		Rtv:     StrToInt64(data["rtv"]),
+		Notify:  StrToInt64(data["notify"]),
+		Endtime: StrToInt64(data["endtime"]),
+	}
+}
+
+func TransferBroadcastRankMessage(data map[string]string) *BroadcastRankMessage {
+	return &BroadcastRankMessage{
+		Type:      data["type"],
+		RoomID:    StrToInt64(data["rid"]),
+		Timestamp: StrToInt64(data["ts"]),
+		Sequex:    StrToInt64(data["seq"]),
+		GroupID:   StrToInt64(data["gid"]),
+		ListAll: &ListDetail{
+			UID:         StrToInt64(data["uid"]),
+			CurrentRank: StrToInt64(data["crk"]),
+			Rs:          StrToInt64(data["rs"]),
+			GoldCost:    StrToInt64(data["gold_cost"]),
+		},
+		List: &ListDetail{
+			UID:         StrToInt64(data["uid"]),
+			LastRank:    StrToInt64(data["lrk"]),
+			CurrentRank: StrToInt64(data["crk"]),
+			Rs:          StrToInt64(data["rs"]),
+			GoldCost:    StrToInt64(data["gold_cost"]),
+		},
+		ListDay: &ListDetail{
+			UID:         StrToInt64(data["uid"]),
+			LastRank:    StrToInt64(data["lrk"]),
+			CurrentRank: StrToInt64(data["crk"]),
+			Rs:          StrToInt64(data["rs"]),
+			GoldCost:    StrToInt64(data["gold_cost"]),
+		},
+	}
+}
+
+func TransferSuperBarrageMessage(data map[string]string) *SuperBarrageMessage {
+	return &SuperBarrageMessage{
+		Type:       data["type"],
+		RoomID:     StrToInt64(data["rid"]),
+		GroupID:    StrToInt64(data["gid"]),
+		SDID:       StrToInt64(data["sdid"]),
+		TRID:       StrToInt64(data["trid"]),
+		Content:    data["content"],
+		Url:        data["url"],
+		ClientType: StrToInt64(data["clitp"]),
+		JumpType:   StrToInt64(data["jmptp"]),
+	}
+}
+
+func TransferRoomGiftBroadcastMessage(data map[string]string) *RoomGiftBroadcastMessage {
+	return &RoomGiftBroadcastMessage{
+		Type:          data["type"],
+		RoomID:        StrToInt64(data["rid"]),
+		GroupID:       StrToInt64(data["gid"]),
+		SendNickName:  data["sn"],
+		DoneeNickName: data["dn"],
+		GiftName:      StrToInt64(data["gn"]),
+		GiftCount:     StrToInt64(data["gc"]),
+		DoneeRoomID:   StrToInt64(data["drid"]),
+		Gs:            StrToInt64(data["gs"]),
+		Gb:            StrToInt64(data["gb"]),
+		Es:            StrToInt64(data["es"]),
+		GiftID:        StrToInt64(data["gfid"]),
+		EID:           StrToInt64(data["eid"]),
+		Bgl:           StrToInt64(data["bgl"]),
+		Ifs:           StrToInt64(data["ifs"]),
+		Cl2:           StrToInt64(data["cl2"]),
 	}
 }
