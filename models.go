@@ -2,7 +2,9 @@ package douyulive
 
 import (
 	"context"
+	"encoding/json"
 	"net"
+	"strings"
 	"sync"
 )
 
@@ -218,23 +220,29 @@ type SwitchBroadcastMessage struct {
 
 // 广播排行榜消息
 type BroadcastRankMessage struct {
-	Type      string      `json:"type"`     // 表示为“广播排行榜消息”，固定为 ranklist
-	RoomID    int64       `json:"rid"`      // 房间ID
-	Timestamp int64       `json:"ts"`       // 排行榜更新时间戳
-	Sequex    int64       `json:"seq"`      // 排行榜序列号
-	GroupID   int64       `json:"gid"`      // 弹幕分组ID
-	ListAll   *ListDetail `json:"list_all"` // 总榜
-	List      *ListDetail `json:"list"`     // 周榜
-	ListDay   *ListDetail `json:"list_day"` // 日榜
+	Type      string        `json:"type"`     // 表示为“广播排行榜消息”，固定为 ranklist
+	RoomID    int64         `json:"rid"`      // 房间ID
+	Timestamp int64         `json:"ts"`       // 排行榜更新时间戳
+	Sequex    int64         `json:"seq"`      // 排行榜序列号
+	GroupID   int64         `json:"gid"`      // 弹幕分组ID
+	ListAll   []*ListDetail `json:"list_all"` // 总榜
+	List      []*ListDetail `json:"list"`     // 周榜
+	ListDay   []*ListDetail `json:"list_day"` // 日榜
 }
 
 // 榜单明细
 type ListDetail struct {
-	UID         int64 `json:"uid"`       // 用户 id
-	LastRank    int64 `json:"lrk"`       // 上次排名
-	CurrentRank int64 `json:"crk"`       // 当前排名
-	Rs          int64 `json:"rs"`        // 排名变化，-1：下降，0：持平，1：上升
-	GoldCost    int64 `json:"gold_cost"` // 当前贡献值
+	UID         int64  `json:"uid"`      // 用户 id
+	NickName    string `json:"nickname"` // 用户昵称
+	LastRank    int64  `json:"lrk"`      // 上次排名
+	CurrentRank int64  `json:"crk"`      // 当前排名
+	Rs          int64  `json:"rs"`       // 排名变化，-1：下降，0：持平，1：上升
+	Gold        int64  `json:"gold"`     // 当前贡献值
+	Icon        string `json:"icon"`
+	Level       int64  `json:"level"` // 粉丝等级
+	Pg          int64  `json:"pg"`    // 平台身份组：默认值 1（表示普通权限用户）
+	Rg          int64  `json:"rg"`    // 房间权限组：默认值 1（表示普通权限用户）
+
 }
 
 // 超级弹幕消息
@@ -447,27 +455,40 @@ func TransferBroadcastRankMessage(data map[string]string) *BroadcastRankMessage 
 		Timestamp: StrToInt64(data["ts"]),
 		Sequex:    StrToInt64(data["seq"]),
 		GroupID:   StrToInt64(data["gid"]),
-		ListAll: &ListDetail{
-			UID:         StrToInt64(data["uid"]),
-			CurrentRank: StrToInt64(data["crk"]),
-			Rs:          StrToInt64(data["rs"]),
-			GoldCost:    StrToInt64(data["gold_cost"]),
-		},
-		List: &ListDetail{
-			UID:         StrToInt64(data["uid"]),
-			LastRank:    StrToInt64(data["lrk"]),
-			CurrentRank: StrToInt64(data["crk"]),
-			Rs:          StrToInt64(data["rs"]),
-			GoldCost:    StrToInt64(data["gold_cost"]),
-		},
-		ListDay: &ListDetail{
-			UID:         StrToInt64(data["uid"]),
-			LastRank:    StrToInt64(data["lrk"]),
-			CurrentRank: StrToInt64(data["crk"]),
-			Rs:          StrToInt64(data["rs"]),
-			GoldCost:    StrToInt64(data["gold_cost"]),
-		},
+		ListAll:   transferListDetail(data["list_all"]),
+		List:      transferListDetail(data["list"]),
+		ListDay:   transferListDetail(data["list_day"]),
 	}
+
+}
+
+func transferListDetail(data string) []*ListDetail {
+	strSlice := strings.Split(data, "@S")
+
+	resp := make([]*ListDetail, 0, len(strSlice))
+	for _, str := range strSlice {
+		str2 := `{"` + str + `"}`
+		str3 := strings.Replace(str2, "@AA=", `":"`, -1)
+		str4 := strings.Replace(str3, "@AS", `","`, -1)
+		str5 := strings.Replace(str4, `,""`, "", -1)
+		m := make(map[string]string)
+		_ = json.Unmarshal([]byte(str5), &m)
+
+		resp = append(resp, &ListDetail{
+			UID:         StrToInt64(m["uid"]),
+			NickName:    m["nickname"],
+			LastRank:    StrToInt64(m["lrk"]),
+			CurrentRank: StrToInt64(m["crk"]),
+			Rs:          StrToInt64(m["rs"]),
+			Gold:        StrToInt64(m["gold"]),
+			Icon:        m["icon"],
+			Level:       StrToInt64(m["level"]),
+			Rg:          StrToInt64(m["rg"]),
+			Pg:          StrToInt64(m["pg"]),
+		})
+	}
+
+	return resp
 }
 
 func TransferSuperBarrageMessage(data map[string]string) *SuperBarrageMessage {

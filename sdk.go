@@ -256,7 +256,8 @@ func (room *liveRoom) heartBeat(ctx context.Context) {
 			"type": "mrkl",
 		})); err != nil {
 			if errorCount > 10 {
-				break
+				room.createConnect()
+				continue
 			}
 			log.Printf("heatbeat failed: %s", err.Error())
 			errorCount++
