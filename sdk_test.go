@@ -7,6 +7,9 @@ import (
 	"testing"
 )
 
+const aid = "xxx"
+const secret = "xxx"
+
 func TestLive_Start(t *testing.T) {
 	live := &Live{
 		Debug:              false, // 不输出日志
@@ -64,6 +67,6 @@ func TestLive_Start(t *testing.T) {
 		},
 	}
 	live.Start(context.Background())
-	_ = live.Join("tjsports", "p32rOjVLxPh2ceJSnaqsbvby", "", 0, 288016)
+	_ = live.Join(aid, secret, "", 0, 288016)
 	live.Wait()
 }
