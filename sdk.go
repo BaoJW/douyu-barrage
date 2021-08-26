@@ -298,7 +298,7 @@ func (room *liveRoom) heartBeat(ctx context.Context) {
 		if _, err := room.conn.Write(MsgToByte(map[string]string{
 			"type": "mrkl",
 		})); err != nil {
-			if errorCount > 10 {
+			if errorCount > 3 {
 				log.Println("尝试重新连接：", room.server, room.port)
 				_, cancel := context.WithCancel(ctx)
 				chReconSignal <- &liveRoom{
@@ -317,9 +317,10 @@ func (room *liveRoom) heartBeat(ctx context.Context) {
 			}
 			log.Printf("heatbeat failed: %s", err.Error())
 			errorCount++
+			time.Sleep(3 * time.Second)
+			continue
 		}
 		errorCount = 0
-		time.Sleep(30 * time.Second)
 	}
 }
 
