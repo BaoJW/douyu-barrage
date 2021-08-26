@@ -39,6 +39,7 @@ func (live *Live) Start(ctx context.Context) {
 
 	live.room = make(map[int]*liveRoom)
 	live.chSocketMessage = make(chan *socketMessage, 30)
+	chReconSignal = make(chan *liveRoom, 1)
 
 	live.wg = sync.WaitGroup{}
 
@@ -81,6 +82,43 @@ func (live *Live) Join(aid, secret, ip string, port int, roomIDs ...int) error {
 		go room.receive(nextCtx, live.chSocketMessage)
 	}
 	return nil
+}
+
+// 房间异常断开后的重连
+func (live *Live) ReJoin(ctx context.Context) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println("尝试重新连接失败：", err)
+			return
+		}
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case liveRoomInfo := <-chReconSignal:
+			if liveRoomInfo.reconnect {
+				nextCtx, cancel := context.WithCancel(live.ctx)
+
+				room := &liveRoom{
+					roomID: liveRoomInfo.roomID,
+					cancel: cancel,
+					aid:    liveRoomInfo.aid,
+					secret: liveRoomInfo.secret,
+					server: liveRoomInfo.server,
+					port:   liveRoomInfo.port,
+				}
+				live.room[liveRoomInfo.roomID] = room
+				room.enter()
+				go room.heartBeat(nextCtx)
+				go room.receive(nextCtx, live.chSocketMessage)
+			}
+
+		default:
+		}
+
+	}
 }
 
 // Remove 移出房间
@@ -243,6 +281,11 @@ func (room *liveRoom) joinGroup() {
 
 // 心跳
 func (room *liveRoom) heartBeat(ctx context.Context) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("heatbeat failed: %s", err)
+		}
+	}()
 	time.Sleep(3 * time.Second)
 	var errorCount = 0
 	for {
@@ -256,8 +299,21 @@ func (room *liveRoom) heartBeat(ctx context.Context) {
 			"type": "mrkl",
 		})); err != nil {
 			if errorCount > 10 {
-				room.createConnect()
-				continue
+				log.Println("尝试重新连接：", room.server, room.port)
+				_, cancel := context.WithCancel(ctx)
+				chReconSignal <- &liveRoom{
+					roomID:    room.roomID,
+					cancel:    cancel,
+					server:    room.server,
+					port:      room.port,
+					token:     room.token,
+					tokenTime: room.tokenTime,
+					aid:       room.aid,
+					secret:    room.secret,
+					auth:      room.auth,
+					reconnect: true,
+				}
+				break
 			}
 			log.Printf("heatbeat failed: %s", err.Error())
 			errorCount++

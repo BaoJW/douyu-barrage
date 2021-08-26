@@ -66,7 +66,9 @@ func TestLive_Start(t *testing.T) {
 			log.Printf("【房间内礼物广播消息】 %d直播间 %s赠送给 %s %d个 %d", msg.RoomID, msg.SendNickName, msg.DoneeNickName, msg.GiftCount, msg.GiftID)
 		},
 	}
-	live.Start(context.Background())
+	ctx := context.Background()
+	live.Start(ctx)
 	_ = live.Join(aid, secret, "", 0, 288016)
+	go live.ReJoin(ctx)
 	live.Wait()
 }

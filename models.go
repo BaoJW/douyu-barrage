@@ -8,6 +8,8 @@ import (
 	"sync"
 )
 
+var chReconSignal chan *liveRoom // 重连直播间信号
+
 // Live 直播间
 type Live struct {
 	Debug                         bool                                 // 是否显示日志
@@ -47,6 +49,7 @@ type liveRoom struct {
 	aid                string
 	secret             string
 	auth               string
+	reconnect          bool
 }
 
 type hostServerList struct {
